@@ -46,13 +46,11 @@ Before chasing anything subtle, confirm the datastore itself performs. The SDK e
 that runs a pure single-thread insert-latency test against the repository:
 
 ```text
-# via the command tool
-sz_command
-  szDiagnostic checkRepositoryPerformance 3
-
-# or from the SDK
+# From the SDK — SzDiagnostic.checkRepositoryPerformance (verified v4 API):
+#   Python:      env.get_diagnostic().check_repository_performance(3)
+#   Java/C#/TS:  env.getDiagnostic().checkRepositoryPerformance(3)
 diagnostic = env.getDiagnostic()
-result = diagnostic.checkRepositoryPerformance(3)   # test for 3 seconds
+result = diagnostic.checkRepositoryPerformance(3)   # run the latency test for 3 seconds
 ```
 
 It reports how many inserts a single thread completed in the interval — a pure latency test, with no
@@ -68,32 +66,43 @@ The single most useful thing you can do while developing your own application or
 and keep it. It returns the engine's internal accounting of how much work it is doing — with **no
 clear-text data** — accumulated across all threads in the process, and it resets each time you call it.
 
-```text
-stats = json.loads(engine.getStats())
-# collect the whole "workload" object over the run
-```
-
 **Send the whole document to Senzing Support.** Eight times out of ten, when there is a performance
-issue, Support can tell you what is going on just from this. It is meant to be collected and sent, not
-decoded field-by-field: the fields are not generally documented and **can change without notice**, so
-do not build tooling that depends on their exact names or shape — capture the entire JSON over a
-window and hand it over.
+issue, Support can tell you what is going on just from this.
 
-That said, a few signals in the `workload` object are commonly useful to glance at yourself (names and
-shape may change between versions — again, send the whole thing rather than parsing narrowly):
+> [!IMPORTANT]
+> These internal fields are **not generally documented and can change without notice** — do not build
+> tooling that depends on their exact names or shape. Capture the **entire** `workload` object over a
+> window and send it. The annotations below illustrate the *kinds* of signals to look for; treat the
+> field names as a guide, not a contract, and confirm against your own version's output.
 
-- A **retries / contention** counter that is climbing indicates general contention — the smaller the
-  better.
-- **Contention lists** (feature types, hot feature hashes, or specific resolved-entity IDs that the
-  engine had to serialize on). If these are non-empty, your input has records that resolve to the same
-  entities arriving close together — **shuffling / randomizing the input order** usually helps.
-- A **thread-state snapshot** (how many threads are active vs. idle vs. currently executing SQL at the
-  instant stats was called). Because it is only an instantaneous snapshot, look for *trends* across
-  several samples, not a single reading:
-  - **Idle** should be close to zero under heavy load. If it isn't, you aren't feeding your threads
-    fast enough — the bottleneck is upstream (input, queue, network), not the engine or database.
-  - A high count **executing SQL** means the system is waiting on the database. That points you at the
-    database and network — but see the caution below before concluding it's the database *server*.
+A few signals in the `workload` object are commonly worth a glance yourself:
+
+```text
+stats = json.loads(engine.getStats())   # accumulates all threads in the process; resets on each call
+
+{ "workload": {
+    "apiVersion": "4.x...",
+    ...
+    "retries": 27,             // general contention — the smaller the better
+    ...
+    // --- these three being non-empty means records that resolve into the SAME entity are arriving
+    //     together; shuffling / randomizing the input order is the usual fix ---
+    "latchContention":      [ ],   // feature types where contention was caught before hitting the DB — empty is ideal
+    "highContentionFeat":   [ ],   // specific hot feature hashes that are problematic — should be empty
+    "highContentionResEnt": [ ],   // specific resolved-entity IDs causing contention — should be empty
+    ...
+    // --- threadState is a SNAPSHOT at the instant getStats() was called; look for TRENDS across samples ---
+    "threadState": {
+      "active":       126,     // threads currently inside an engine call (e.g. addRecord)
+      "idle":           3,     // threads NOT in a call — should be near zero under heavy load; if it isn't,
+                               //   you aren't feeding your threads fast enough (bottleneck is UPSTREAM:
+                               //   input, queue, network — not the engine or database)
+      "sqlExecuting": 117      // threads executing SQL / fetching results = waiting on the database. Points
+                               //   you at the DB and network — but read the holistic caution below before
+                               //   concluding it's the database *server*.
+    }
+} }
+```
 
 ## When you're database- or contention-bound: what to collect
 
@@ -105,6 +114,12 @@ shape may change between versions — again, send the whole thing rather than pa
 > with the signals below instead — the engine's own workload counters, the database's wait/contention
 > statistics, and host telemetry. None of those need symbols, and together they tell you the same story
 > the stack used to, more reliably.
+>
+> **You can still send the raw stacks to Senzing Support.** You can't resolve the `?? ()` frames
+> yourself, but Support can — provided you include the exact **Senzing version and platform**
+> (OS/architecture) the process was running, so they can match the addresses against that build's
+> symbols. A `gdb -p <pid> -batch -ex "thread apply all bt"` dump from a stuck/slow process is still
+> worth capturing; just hand it to Support together with the version and platform.
 
 Work the signals in this order and **correlate everything by wall-clock time** across the app host(s)
 and the database host.
@@ -190,8 +205,12 @@ together — it is the fastest path to an answer:
    database host, same window.
 4. Your **throughput** number and how you measured it (measure sustained end-to-end throughput at the
    point work is acknowledged as done, not an instantaneous peak).
-5. Your **configuration**: which database backend, the relevant engine settings, and how many
-   **processes and threads** you are running.
+5. Your **configuration**: the exact **Senzing version and platform** (OS/architecture — Support needs
+   these to symbolize any stack dumps you include), which database backend, the relevant engine
+   settings, and how many **processes and threads** you are running.
+6. **Optional, but valuable when a process is stuck or slow:** a `gdb` all-thread backtrace dump
+   (`gdb -p <pid> -batch -ex "thread apply all bt"`). The frames will be unsymbolized `?? ()` — send it
+   anyway, with the version and platform above; Support symbolizes it against the matching build.
 
 ## Reference
 
