@@ -46,7 +46,11 @@ Before chasing anything subtle, confirm the datastore itself performs. The SDK e
 that runs a pure single-thread insert-latency test against the repository:
 
 ```text
-# From the SDK — SzDiagnostic.checkRepositoryPerformance (verified v4 API):
+# via the sz_command CLI (interactive shell) — verified against the tool:
+sz_command
+  check_repository_performance 3        # seconds to run; omit for the default of 3
+
+# or from the SDK — SzDiagnostic.checkRepositoryPerformance:
 #   Python:      env.get_diagnostic().check_repository_performance(3)
 #   Java/C#/TS:  env.getDiagnostic().checkRepositoryPerformance(3)
 diagnostic = env.getDiagnostic()
