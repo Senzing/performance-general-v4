@@ -81,25 +81,32 @@ A few signals in the `workload` object are commonly worth a glance yourself:
 stats = json.loads(engine.getStats())   # accumulates all threads in the process; resets on each call
 
 { "workload": {
-    "apiVersion": "4.x...",
+    "apiVersion": "4.4.0...",
     ...
-    "retries": 27,             // general contention — the smaller the better
+    "processing": {
+      "addedRecords": 13602,
+      "details": { "retries": 0, ... }         // retries: general write-path contention — smaller is better
+    },
     ...
-    // --- these three being non-empty means records that resolve into the SAME entity are arriving
+    // --- non-empty contention maps mean records resolving into the SAME feature/entity are arriving
     //     together; shuffling / randomizing the input order is the usual fix ---
-    "latchContention":      [ ],   // feature types where contention was caught before hitting the DB — empty is ideal
-    "highContentionFeat":   [ ],   // specific hot feature hashes that are problematic — should be empty
-    "highContentionResEnt": [ ],   // specific resolved-entity IDs causing contention — should be empty
+    "contention": {
+      "valuelatch": { "NAMEREGION_KEY": 70 },  // feature-key contention caught in memory before the DB — ideally small/empty
+      "feature":    { },                       // specific hot feature values that are problematic — should be empty
+      "resEnt":     { }                        // specific resolved-entity IDs causing contention — should be empty
+    },
+    "lockWaits": { "refreshLocks": { "count": 287, "totalMS": 1, "maxMS": 1 } },  // engine-internal lock-wait time
     ...
     // --- threadState is a SNAPSHOT at the instant getStats() was called; look for TRENDS across samples ---
     "threadState": {
-      "active":       126,     // threads currently inside an engine call (e.g. addRecord)
-      "idle":           3,     // threads NOT in a call — should be near zero under heavy load; if it isn't,
-                               //   you aren't feeding your threads fast enough (bottleneck is UPSTREAM:
-                               //   input, queue, network — not the engine or database)
-      "sqlExecuting": 117      // threads executing SQL / fetching results = waiting on the database. Points
-                               //   you at the DB and network — but read the holistic caution below before
-                               //   concluding it's the database *server*.
+      "active": 2,             // threads currently inside an engine call (e.g. addRecord)
+      "idle": 5,               // threads NOT in a call — near zero under heavy load; if not, you aren't feeding
+                               //   your threads fast enough (bottleneck is UPSTREAM: input, queue, network)
+      "sqlExecuting": 2,       // threads executing SQL / fetching = waiting on the database. Points you at the
+                               //   DB and network — but read the holistic caution below before blaming the DB *server*.
+      "loader": 1, "resolver": 1, "scoring": 1,          // active threads by phase
+      "dataLatchContention": 0, "obsEntContention": 0,   // live contention counters (nonzero = contention right now)
+      "resEntContention": 0, "governorContention": 0
     }
 } }
 ```
