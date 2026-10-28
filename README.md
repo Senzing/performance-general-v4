@@ -2,7 +2,7 @@
 
 # General Performance FAQ
 
-Backend-independent performance and diagnostics guidance for running **SENZING® v4 software** under
+Backend-independent performance and diagnostics guidance for running **SENZING® SDK v4** under
 high-throughput load. This is the common material that applies no matter which database you use.
 For backend-specific tuning, see the companion repositories:
 
@@ -13,7 +13,7 @@ Most of what follows is about **finding the bottleneck** and **what to collect f
 because at scale the answer is almost always in your database, your network or your data — not in a
 knob on the engine.
 
-## How does Senzing software scale?
+## How does the Senzing SDK scale?
 
 In your application/service you initialize **one `SzEngine` per process**, then share that one engine
 across all the threads in the process. The engine automatically creates a "context" — including database
@@ -120,7 +120,7 @@ stats = json.loads(engine.getStats())   # accumulates all threads in the process
 ## When you're database- or contention-bound: what to collect
 
 > [!IMPORTANT]
-> **Senzing v4 software ships stripped libraries with no build ID.** Unlike earlier versions, you **cannot** get
+> **Senzing SDK v4 ships stripped libraries with no build ID.** Unlike earlier versions, you **cannot** get
 > a meaningful symbolized stack trace out of a running v4 engine — a debugger or profiler attached to
 > the process shows unresolved `?? ()` frames that cannot be attributed to a function or a source line.
 > So the old "attach gdb and read the Senzing call stack" technique **does not apply to v4**. Diagnose
