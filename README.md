@@ -1,6 +1,15 @@
-# General Performance FAQ
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/senzing-logo-dark-theme.png">
+    <img src="assets/senzing-logo-light-theme.png" alt="Senzing" width="240">
+  </picture>
+</p>
 
-Backend-independent performance and diagnostics guidance for running **Senzing v4** under
+<h1 align="center">General performance FAQ</h1>
+
+<img src="assets/ember-rule.svg" alt="" width="100%" height="4">
+
+Backend-independent performance and diagnostics guidance for running **SENZING® SDK v4** under
 high-throughput load. This is the common material that applies no matter which database you use.
 For backend-specific tuning, see the companion repositories:
 
@@ -8,13 +17,13 @@ For backend-specific tuning, see the companion repositories:
 - [postgresql-performance-v4](https://github.com/Senzing/postgresql-performance-v4) — PostgreSQL
 
 Most of what follows is about **finding the bottleneck** and **what to collect for Senzing Support**,
-because at scale the answer is almost always in your database, your network, or your data — not in a
+because at scale the answer is almost always in your database, your network or your data — not in a
 knob on the engine.
 
-## How does Senzing scale?
+## How does the Senzing SDK scale?
 
 In your application/service you initialize **one `SzEngine` per process**, then share that one engine
-across all the threads in the process. Senzing automatically creates a "context" — including database
+across all the threads in the process. The engine automatically creates a "context" — including database
 connections — for each thread that calls engine functions. The engine has no internal thread pool of
 its own.
 
@@ -58,7 +67,7 @@ result = diagnostic.checkRepositoryPerformance(3)   # run the latency test for 3
 ```
 
 It reports how many inserts a single thread completed in the interval — a pure latency test, with no
-concurrency and no entity-resolution work. As a rough sanity baseline, a reasonably configured
+concurrency and no entity resolution work. As a rough sanity baseline, a reasonably configured
 environment should manage on the order of several thousand inserts in a 3-second window (a well-tuned
 setup comfortably exceeds ~9000). If this number is low, stop here — the problem is database/network
 latency, and no engine tuning will paper over it.
@@ -118,16 +127,16 @@ stats = json.loads(engine.getStats())   # accumulates all threads in the process
 ## When you're database- or contention-bound: what to collect
 
 > [!IMPORTANT]
-> **Senzing v4 ships stripped libraries with no build ID.** Unlike earlier versions, you **cannot** get
+> **Senzing SDK v4 ships stripped libraries with no build ID.** Unlike earlier versions, you **cannot** get
 > a meaningful symbolized stack trace out of a running v4 engine — a debugger or profiler attached to
 > the process shows unresolved `?? ()` frames that cannot be attributed to a function or a source line.
-> So the old "attach gdb and read the Senzing call stack" technique **does not apply to v4**. Diagnose
+> So the old "attach gdb and read the engine call stack" technique **does not apply to v4**. Diagnose
 > with the signals below instead — the engine's own workload counters, the database's wait/contention
-> statistics, and host telemetry. None of those need symbols, and together they tell you the same story
+> statistics and host telemetry. None of those need symbols, and together they tell you the same story
 > the stack used to, more reliably.
 >
 > **You can still send the raw stacks to Senzing Support.** You can't resolve the `?? ()` frames
-> yourself, but Support can — provided you include the exact **Senzing version and platform**
+> yourself, but Support can — provided you include the exact **Senzing SDK version and platform**
 > (OS/architecture) the process was running, so they can match the addresses against that build's
 > symbols. A `gdb -p <pid> -batch -ex "thread apply all bt"` dump from a stuck/slow process is still
 > worth capturing; just hand it to Support together with the version and platform.
@@ -145,8 +154,8 @@ server — over the same time window (`sar`, `mpstat`, `iostat`, run-queue lengt
 - **iowait and disk latency/utilization** on the database host.
 - **Run-queue length** (are there more runnable threads than CPUs?).
 
-The decisive triage rule: **if the database CPU is mostly idle, disk latency is low, and the top waits
-are locks or latches, then the bottleneck is contention, not resources** — adding CPU, memory, or IO
+The decisive triage rule: **if the database CPU is mostly idle, disk latency is low and the top waits
+are locks or latches, then the bottleneck is contention, not resources** — adding CPU, memory or input/output (IO)
 will not help; you have to reduce the contention (or the work that causes it).
 
 > [!NOTE]
@@ -158,7 +167,7 @@ will not help; you have to reduce the contention (or the work that causes it).
 
 This is the primary triage once you know a tier is database-bound. Capture the database's wait
 statistics as a **delta over a short window** (snapshot → wait ~30-60s → snapshot → subtract), not as a
-cumulative total, and rank the waits by the time spent in them. The backend-specific queries live in
+cumulative total and rank the waits by the time spent in them. The backend-specific queries live in
 the companion repos; the cross-backend shape is:
 
 - **PostgreSQL** — sample the live wait-event distribution from `pg_stat_activity` (active client
@@ -172,21 +181,21 @@ the companion repos; the cross-backend shape is:
 
 Whatever the backend, the goal is the same: identify **which resource** the engine's threads are
 waiting on, then decide whether it's a resource limit (add hardware) or a contention hotspot (change
-configuration, index, or data ordering). Follow the companion repo for that backend to turn the wait
+configuration, index or data ordering). Follow the companion repo for that backend to turn the wait
 you found into a fix.
 
 ### 3. Cross-check against the engine's workload stats
 
 Line the database picture up against the `getStats()` workload document from the same window. If the
 engine reports most threads **executing SQL** while the database server is **idle**, the limit is in
-the round trip — the client library, the network, or per-record serialization — not the database
+the round trip — the client library, the network or per-record serialization — not the database
 server's capacity. That is exactly the case where **adding processes** (each with its own client
 environment) buys you concurrency that adding threads does not.
 
 ## Don't jump to conclusions — take a holistic view
 
 When the signals say your threads are "waiting on the database," that only means the delay is somewhere
-on the path **to** the database — it could be the vendor's database client library, the network, or the
+on the path **to** the database — it could be the vendor's database client library, the network or the
 database server itself. It does **not** by itself mean the database server is out of capacity, and it
 does **not** mean the database can't handle more load from more threads or processes. For example, some
 prebuilt database client driver-managers are compiled with a process-global lock and cannot scale
@@ -216,9 +225,9 @@ together — it is the fastest path to an answer:
    database host, same window.
 4. Your **throughput** number and how you measured it (measure sustained end-to-end throughput at the
    point work is acknowledged as done, not an instantaneous peak).
-5. Your **configuration**: the exact **Senzing version and platform** (OS/architecture — Support needs
+5. Your **configuration**: the exact **Senzing SDK version and platform** (OS/architecture — Support needs
    these to symbolize any stack dumps you include), which database backend, the relevant engine
-   settings, and how many **processes and threads** you are running.
+   settings and how many **processes and threads** you are running.
 6. **Optional, but valuable when a process is stuck or slow:** a `gdb` all-thread backtrace dump
    (`gdb -p <pid> -batch -ex "thread apply all bt"`). The frames will be unsymbolized `?? ()` — send it
    anyway, with the version and platform above; Support symbolizes it against the matching build.
