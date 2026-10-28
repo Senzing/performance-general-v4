@@ -1,3 +1,5 @@
+<p><img src="assets/senzing-logo.jpg" alt="Senzing logo" width="56"></p>
+
 # General Performance FAQ
 
 Backend-independent performance and diagnostics guidance for running **Senzing v4** under
