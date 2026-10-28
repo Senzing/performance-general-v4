@@ -1,6 +1,13 @@
-<p><img src="assets/senzing-logo.jpg" alt="Senzing logo" width="56"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/senzing-logo-dark-theme.png">
+    <img src="assets/senzing-logo-light-theme.png" alt="Senzing" width="240">
+  </picture>
+</p>
 
-# General Performance FAQ
+<h1 align="center">General performance FAQ</h1>
+
+<img src="assets/ember-rule.svg" alt="" width="100%" height="4">
 
 Backend-independent performance and diagnostics guidance for running **SENZING® SDK v4** under
 high-throughput load. This is the common material that applies no matter which database you use.
@@ -22,7 +29,7 @@ its own.
 
 What this means:
 
-1. **You need real operating system (OS) threads.** Cooperative concurrency — Python `gevent`/`asyncio`, Go goroutines,
+1. **You need real OS threads.** Cooperative concurrency — Python `gevent`/`asyncio`, Go goroutines,
    Java virtual threads, etc. — will not scale here. Those multiplex work onto a small number of OS
    threads, so you cannot parallelize past the number of OS threads actually running. Use real threads.
 2. **Don't constantly create and destroy threads.** Because each thread lazily creates its own context
@@ -44,7 +51,7 @@ you have it.
 
 ## Validate the basics of the setup
 
-Before chasing anything subtle, confirm the datastore itself performs. The software development kit (SDK) exposes a diagnostic
+Before chasing anything subtle, confirm the datastore itself performs. The SDK exposes a diagnostic
 that runs a pure single-thread insert-latency test against the repository:
 
 ```text
@@ -68,7 +75,7 @@ latency, and no engine tuning will paper over it.
 ## High-level stats — the first thing to collect (and send to Support)
 
 The single most useful thing you can do while developing your own application or service is to
-**periodically capture the JavaScript Object Notation (JSON) document returned by `SzEngine.getStats()`** (say, every 5 minutes)
+**periodically capture the JSON document returned by `SzEngine.getStats()`** (say, every 5 minutes)
 and keep it. It returns the engine's internal accounting of how much work it is doing — with **no
 clear-text data** — accumulated across all threads in the process, and it resets each time you call it.
 
@@ -123,13 +130,13 @@ stats = json.loads(engine.getStats())   # accumulates all threads in the process
 > **Senzing SDK v4 ships stripped libraries with no build ID.** Unlike earlier versions, you **cannot** get
 > a meaningful symbolized stack trace out of a running v4 engine — a debugger or profiler attached to
 > the process shows unresolved `?? ()` frames that cannot be attributed to a function or a source line.
-> So the old "attach gdb and read the Senzing call stack" technique **does not apply to v4**. Diagnose
+> So the old "attach gdb and read the engine call stack" technique **does not apply to v4**. Diagnose
 > with the signals below instead — the engine's own workload counters, the database's wait/contention
-> statistics, and host telemetry. None of those need symbols, and together they tell you the same story
+> statistics and host telemetry. None of those need symbols, and together they tell you the same story
 > the stack used to, more reliably.
 >
 > **You can still send the raw stacks to Senzing Support.** You can't resolve the `?? ()` frames
-> yourself, but Support can — provided you include the exact **Senzing version and platform**
+> yourself, but Support can — provided you include the exact **Senzing SDK version and platform**
 > (OS/architecture) the process was running, so they can match the addresses against that build's
 > symbols. A `gdb -p <pid> -batch -ex "thread apply all bt"` dump from a stuck/slow process is still
 > worth capturing; just hand it to Support together with the version and platform.
@@ -142,12 +149,12 @@ and the database host.
 Collect basic OS telemetry on every host in the run — the application/loader hosts and the database
 server — over the same time window (`sar`, `mpstat`, `iostat`, run-queue length, `iowait`):
 
-- **Central processing unit (CPU) idle vs. busy**, per host. Which tier is actually saturated — the app hosts doing engine work,
+- **CPU idle vs. busy**, per host. Which tier is actually saturated — the app hosts doing engine work,
   or the database server?
 - **iowait and disk latency/utilization** on the database host.
 - **Run-queue length** (are there more runnable threads than CPUs?).
 
-The decisive triage rule: **if the database CPU is mostly idle, disk latency is low, and the top waits
+The decisive triage rule: **if the database CPU is mostly idle, disk latency is low and the top waits
 are locks or latches, then the bottleneck is contention, not resources** — adding CPU, memory or input/output (IO)
 will not help; you have to reduce the contention (or the work that causes it).
 
@@ -160,13 +167,13 @@ will not help; you have to reduce the contention (or the work that causes it).
 
 This is the primary triage once you know a tier is database-bound. Capture the database's wait
 statistics as a **delta over a short window** (snapshot → wait ~30-60s → snapshot → subtract), not as a
-cumulative total, and rank the waits by the time spent in them. The backend-specific queries live in
+cumulative total and rank the waits by the time spent in them. The backend-specific queries live in
 the companion repos; the cross-backend shape is:
 
 - **PostgreSQL** — sample the live wait-event distribution from `pg_stat_activity` (active client
   backends, grouped by wait event) and read IO efficiency/latency from `pg_stat_io`. A wait
   distribution dominated by **data-file reads** means cache-miss random reads — the working set has
-  outgrown the buffer pool; the answer is fewer reads per record and more random access memory (RAM), not a faster CPU.
+  outgrown the buffer pool; the answer is fewer reads per record and more RAM, not a faster CPU.
 - **Microsoft SQL Server** — rank `sys.dm_os_wait_stats` by delta wait time, and use
   `sys.dm_db_index_operational_stats` to attribute a lock or latch wait to a **specific index** (a
   per-statement view cannot do that). Page-latch waits with a huge task count are last-page insert
@@ -188,7 +195,7 @@ environment) buys you concurrency that adding threads does not.
 ## Don't jump to conclusions — take a holistic view
 
 When the signals say your threads are "waiting on the database," that only means the delay is somewhere
-on the path **to** the database — it could be the vendor's database client library, the network, or the
+on the path **to** the database — it could be the vendor's database client library, the network or the
 database server itself. It does **not** by itself mean the database server is out of capacity, and it
 does **not** mean the database can't handle more load from more threads or processes. For example, some
 prebuilt database client driver-managers are compiled with a process-global lock and cannot scale
@@ -218,9 +225,9 @@ together — it is the fastest path to an answer:
    database host, same window.
 4. Your **throughput** number and how you measured it (measure sustained end-to-end throughput at the
    point work is acknowledged as done, not an instantaneous peak).
-5. Your **configuration**: the exact **Senzing version and platform** (OS/architecture — Support needs
+5. Your **configuration**: the exact **Senzing SDK version and platform** (OS/architecture — Support needs
    these to symbolize any stack dumps you include), which database backend, the relevant engine
-   settings, and how many **processes and threads** you are running.
+   settings and how many **processes and threads** you are running.
 6. **Optional, but valuable when a process is stuck or slow:** a `gdb` all-thread backtrace dump
    (`gdb -p <pid> -batch -ex "thread apply all bt"`). The frames will be unsymbolized `?? ()` — send it
    anyway, with the version and platform above; Support symbolizes it against the matching build.

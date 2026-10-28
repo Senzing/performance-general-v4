@@ -19,5 +19,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Diagnostics no longer rely on symbolized stack traces: Senzing SDK v4 ships stripped libraries with no
-  build ID, so the previous "attach a debugger and read the Senzing call stack" technique has been
+  build ID, so the previous "attach a debugger and read the engine call stack" technique has been
   replaced with engine workload counters, database wait/contention statistics and host telemetry.
